@@ -12,12 +12,14 @@
  * @author    Ranganath Pathak <pathak@scrs1.org>
  * @author    Tyler Wrenn <tyler@tylerwrenn.com>
  * @author    Robert Down <robertdown@live.com>
+ * @author    Stephen Nielson <snielson@discoverandchange.com>
  * @copyright Copyright (c) 2017-2020 Brady Miller <brady.g.miller@gmail.com>
  * @copyright Copyright (c) 2017 Sharon Cohen <sharonco@matrix.co.il>
  * @copyright Copyright (c) 2018-2020 Stephen Waite <stephen.waite@cmsvt.com>
  * @copyright Copyright (c) 2018 Ranganath Pathak <pathak@scrs1.org>
  * @copyright Copyright (c) 2020 Tyler Wrenn <tyler@tylerwrenn.com>
  * @copyright Copyright (c) 2021-2022 Robert Down <robertdown@live.com
+ * @copyright Copyright (c) 2024 Care Management Solutions, Inc. <stephen.waite@cmsvt.com>
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
 
@@ -53,6 +55,9 @@ use OpenEMR\Services\ImmunizationService;
 use OpenEMR\Services\PatientIssuesService;
 use OpenEMR\Services\PatientService;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use OpenEMR\Patient\Cards\InsuranceViewCard;
+use OpenEMR\Patient\Cards\BillingViewCard;
+use OpenEMR\Patient\Cards\DemographicsViewCard;
 
 $twig = new TwigContainer(null, $GLOBALS['kernel']);
 
@@ -335,7 +340,7 @@ $arrOeUiSettings = array(
     'heading_title' => xl('Medical Record Dashboard'),
     'include_patient_name' => true,
     'expandable' => true,
-    'expandable_files' => array(), //all file names need suffix _xpd
+    'expandable_files' => array('demographics_xpd'), //all file names need suffix _xpd
     'action' => "", //conceal, reveal, search, reset, link or back
     'action_title' => "",
     'action_href' => "", //only for actions - reset, link or back
@@ -395,11 +400,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
             let url = '../../main/calendar/add_edit_event.php?patientid=' + <?php echo js_url($pid); ?>;
             dlgopen(url, '_blank', 800, 500, '', title);
             return false;
-        }
-
-        function getWeno() {
-            top.restoreSession();
-            location.href = '../../weno/indexrx.php'
         }
 
         function toggleIndicator(target, div) {
@@ -609,7 +609,11 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
             ?>
 
             // load divs
-            placeHtml("stats.php", "stats_div", true);
+            placeHtml("stats.php", "stats_div", true).then(() => {
+                $('[data-toggle="collapse"]').on('click', function (e) {
+                    updateUserVisibilitySetting(e);
+                });
+            });
             placeHtml("pnotes_fragment.php", 'pnotes_ps_expand').then(() => {
                 // must be delegated event!
                 $(this).on("click", ".complete_btn", function() {
@@ -815,11 +819,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
             <?php } elseif ($active_reminders || $all_allergy_alerts) { ?>
                 openReminderPopup();
             <?php } ?>
-
-            // $(".card-title").on('click', "button", (e) => {
-            //     console.debug("click");
-            //     updateUserVisibilitySetting(e);
-            // });
         });
 
         /**
@@ -835,30 +834,33 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
             const targetID = e.target.getAttribute("data-target");
             const target = document.querySelector(targetID);
             const targetStr = targetID.substring(1);
-
+            // test ensure at least an element we want.
+            if (target.classList.contains("collapse")) {
+                // who is icon. Easier to catch BS event than create one specific for this decision..
+                // Should always be icon target
+                let iconTarget = e.target.children[0] || e.target;
+                // toggle
+                if (iconTarget.classList.contains("fa-expand")) {
+                    iconTarget.classList.remove('fa-expand');
+                    iconTarget.classList.add('fa-compress');
+                }
+                else {
+                    iconTarget.classList.remove('fa-compress');
+                    iconTarget.classList.add('fa-expand');
+                }
+            }
             let formData = new FormData();
             formData.append("csrf_token_form", <?php echo js_escape(CsrfUtils::collectCsrfToken()); ?>);
             formData.append("target", targetStr);
             formData.append("mode", (target.classList.contains("show")) ? 0 : 1);
-
+            top.restoreSession();
             const response = await fetch("../../../library/ajax/user_settings.php", {
                 method: "POST",
                 credentials: 'same-origin',
                 body: formData,
             });
 
-            const update = await response.text();
-            return update;
-        }
-
-        // Update the User's visibility setting when the card header is clicked
-        function cardTitleButtonClickListener() {
-            const buttons = document.querySelectorAll(".card-title a[data-toggle='collapse']");
-            buttons.forEach((b) => {
-                b.addEventListener("click", (e) => {
-                    updateUserVisibilitySetting(e);
-                });
-            });
+            return await response.text();
         }
 
         // JavaScript stuff to do when a new patient is set.
@@ -878,7 +880,7 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                 } else {
                     echo js_escape(" " . xl('DOB') . ": " . oeFormatShortDate($result['DOB_YMD']) . " " . xl('Age at death') . ": " . oeFormatAge($result['DOB_YMD'], $date_of_death));
                 } ?>);
-                var EncounterDateArray = new Array;
+                var EncounterDateArray = [];
                 var CalendarCategoryArray = new Array;
                 var EncounterIdArray = new Array;
                 var Count = 0;
@@ -914,10 +916,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
         $(window).on('load', function() {
             setMyPatient();
         });
-
-        document.addEventListener("DOMContentLoaded", () => {
-            cardTitleButtonClickListener();
-        });
     </script>
 
     <style>
@@ -928,11 +926,11 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
         }
 
         /* Short term fix. This ensures the problem list, allergies, medications, and immunization cards handle long lists without interuppting
-           the UI. This should be configurable and should go in a more appropriate place */
+           the UI. This should be configurable and should go in a more appropriate place
         .pami-list {
             max-height: 200px;
             overflow-y: scroll;
-        }
+        } */
 
         <?php
         if (!empty($GLOBALS['right_justify_labels_demographics']) && ($_SESSION['language_direction'] == 'ltr')) { ?>
@@ -1044,13 +1042,10 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                     $pl = (AclMain::aclCheckIssue('medical_problem')) ? 1 : 0;
                     $meds = (AclMain::aclCheckIssue('medication')) ? 1 : 0;
                     $rx = (!$GLOBALS['disable_prescriptions'] && AclMain::aclCheckCore('patients', 'rx')) ? 1 : 0;
-                    $cards = $allergy + $pl + $meds;
+                    $cards = max(1, ($allergy + $pl + $meds));
                     $col = "p-1 ";
-
-                    if ($cards > 0) {
-                        $colInt = 12 / $cards;
-                        $col .= "col-md-" . $colInt;
-                    }
+                    $colInt = 12 / $cards;
+                    $col .= "col-md-" . $colInt;
 
                     /**
                      * Helper function to return only issues with an outcome not equal to resolved
@@ -1072,7 +1067,7 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                         $id = 'allergy_ps_expand';
                         $viewArgs = [
                             'title' => xl('Allergies'),
-                            'card_container_class_list' => ['flex-fill', 'mx-1'],
+                            'card_container_class_list' => ['flex-fill', 'mx-1', 'card'],
                             'id' => $id,
                             'forceAlwaysOpen' => false,
                             'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
@@ -1096,7 +1091,7 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                         $id = 'medical_problem_ps_expand';
                         $viewArgs = [
                             'title' => xl('Medical Problems'),
-                            'card_container_class_list' => ['flex-fill', 'mx-1'],
+                            'card_container_class_list' => ['flex-fill', 'mx-1', 'card'],
                             'id' => $id,
                             'forceAlwaysOpen' => false,
                             'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
@@ -1118,7 +1113,7 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                         $id = 'medication_ps_expand';
                         $viewArgs = [
                             'title' => xl('Medications'),
-                            'card_container_class_list' => ['flex-fill', 'mx-1'],
+                            'card_container_class_list' => ['flex-fill', 'mx-1', 'card'],
                             'id' => $id,
                             'forceAlwaysOpen' => false,
                             'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
@@ -1164,7 +1159,7 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                         $id = "prescriptions_ps_expand";
                         $viewArgs = [
                             'title' => xl("Prescriptions"),
-                            'card_container_class_list' => ['flex-fill', 'mx-1'],
+                            'card_container_class_list' => ['flex-fill', 'mx-1', 'card'],
                             'id' => $id,
                             'forceAlwaysOpen' => false,
                             'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
@@ -1176,15 +1171,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                             $viewArgs['title'] = 'Prescription History';
                             $viewArgs['btnLabel'] = 'Add';
                             $viewArgs['btnLink'] = "{$GLOBALS['webroot']}/interface/eRx.php?page=compose";
-                        } elseif ($GLOBALS['weno_rx_enable']) {
-                            // weno plus button which opens their iframe
-                            $viewArgs['weno'] = true;
-                            $viewArgs['title'] = "WENO ComposeRx";
-                            $viewArgs['btnLabel'] = 'Add';
-                            $viewArgs['btnLink'] = "{$GLOBALS['webroot']}/interface/weno/indexrx.php";
-                            $viewArgs['btnClass'] = "iframe";
-                            $viewArgs['linkMethod'] = "javascript";
-                            $viewArgs['btnLink'] = "editScripts('{$GLOBALS['webroot']}/controller.php?prescription&list&id=" . attr_url($pid) . "')";
                         } else {
                             $viewArgs['btnLink'] = "editScripts('{$GLOBALS['webroot']}/controller.php?prescription&list&id=" . attr_url($pid) . "')";
                             $viewArgs['linkMethod'] = "javascript";
@@ -1208,7 +1194,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                     endif;
                     ?>
                 </div>
-            </div>
             <div class="row">
                 <div class="col-md-8">
                     <?php
@@ -1219,11 +1204,19 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                     endif;
 
                     $sectionRenderEvents = $ed->dispatch(new SectionEvent('primary'), SectionEvent::EVENT_HANDLE);
+                    $sectionRenderEvents->addCard(new DemographicsViewCard($result, $result2, ['dispatcher' => $ed]));
+                    if (!$GLOBALS['hide_billing_widget']) {
+                        $sectionRenderEvents->addCard(new BillingViewCard($pid, $insco_name, $result['billing_note'], $result3, ['dispatcher' => $ed]));
+                    }
+                    $sectionRenderEvents->addCard(new InsuranceViewCard($pid, ['dispatcher' => $ed]));
                     $sectionCards = $sectionRenderEvents->getCards();
+
+                    // if anyone wants to render anything before the patient demographic list
+                    $GLOBALS["kernel"]->getEventDispatcher()->dispatch(new RenderEvent($pid), RenderEvent::EVENT_SECTION_LIST_RENDER_BEFORE, 10);
 
                     foreach ($sectionCards as $card) {
                         $_auth = $card->getAcl();
-                        if (!AclMain::aclCheckCore($_auth[0], $_auth[1])) {
+                        if (!empty($_auth) && !AclMain::aclCheckCore($_auth[0], $_auth[1])) {
                             continue;
                         }
 
@@ -1247,183 +1240,6 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
 
                         echo $t->render($card->getTemplateFile(), array_merge($viewArgs, $card->getTemplateVariables()));
                     }
-
-                    if (!$GLOBALS['hide_billing_widget']) :
-                        $forceBillingExpandAlways = ($GLOBALS['force_billing_widget_open']) ? true : false;
-                        $patientbalance = get_patient_balance($pid, false);
-                        $insurancebalance = get_patient_balance($pid, true) - $patientbalance;
-                        $totalbalance = $patientbalance + $insurancebalance;
-                        $unallocated_amt = get_unallocated_patient_balance($pid);
-
-                        $id = "billing_ps_expand";
-                        $dispatchResult = $ed->dispatch(new CardRenderEvent('billing'), CardRenderEvent::EVENT_HANDLE);
-
-                        $viewArgs = [
-                            'title' => xl('Billing'),
-                            'id' => $id,
-                            'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
-                            'hideBtn' => true,
-                            'patientBalance' => $patientbalance,
-                            'insuranceBalance' => $insurancebalance,
-                            'totalBalance' => $totalbalance,
-                            'unallocated' => $unallocated_amt,
-                            'forceAlwaysOpen' => $forceBillingExpandAlways,
-                            'prependedInjection' => $dispatchResult->getPrependedInjection(),
-                            'appendedInjection' => $dispatchResult->getAppendedInjection(),
-                        ];
-
-                        if (!empty($result['billing_note'])) {
-                            $viewArgs['billingNote'] = $result['billing_note'];
-                        }
-
-                        if (!empty($result3['provider'])) {
-                            $viewArgs['provider'] = true;
-                            $viewArgs['insName'] = $insco_name;
-                            $viewArgs['copay'] = $result3['copay'];
-                            $viewArgs['effDate'] = $result3['effdate'];
-                            $viewArgs['effDateEnd'] = $result3['effdate_end'];
-                        }
-
-                        echo $twig->getTwig()->render('patient/card/billing.html.twig', $viewArgs);
-                    endif; // End the hide_billing_widget
-
-                    // if anyone wants to render anything before the patient demographic list
-                    $GLOBALS["kernel"]->getEventDispatcher()->dispatch(new RenderEvent($pid), RenderEvent::EVENT_SECTION_LIST_RENDER_BEFORE, 10);
-
-                    if (AclMain::aclCheckCore('patients', 'demo')) :
-                        $dispatchResult = $ed->dispatch(new CardRenderEvent('demographic'), CardRenderEvent::EVENT_HANDLE);
-                        // Render the Demographics box
-                        $viewArgs = [
-                            'title' => xl("Demographics"),
-                            'id' => "demographics_ps_expand",
-                            'btnLabel' => "Edit",
-                            'btnLink' => "demographics_full.php",
-                            'linkMethod' => "html",
-                            'auth' => ACLMain::aclCheckCore('patients', 'demo', '', 'write'),
-                            'requireRestore' => (!isset($_SESSION['patient_portal_onsite_two'])) ? true : false,
-                            'initiallyCollapsed' => (getUserSetting("demographics_ps_expand") == 0) ? true : false,
-                            'tabID' => "DEM",
-                            'result' => $result,
-                            'result2' => $result2,
-                            'prependedInjection' => $dispatchResult->getPrependedInjection(),
-                            'appendedInjection' => $dispatchResult->getAppendedInjection(),
-                        ];
-                        echo $twig->getTwig()->render('patient/card/tab_base.html.twig', $viewArgs);
-
-                        // Insurance
-                        $insArr = [];
-                        $insInBinder = '?';
-                        for ($y = 1; count($insurance_array) > $y; $y++) {
-                            $insInBinder .= ',?';
-                        }
-                        $sql = "SELECT * FROM insurance_data WHERE pid = ? AND type IN(" . $insInBinder . ") ORDER BY type, date DESC";
-                        $params[] = $pid;
-                        $params = array_merge($params, $insurance_array);
-                        $res = sqlStatement($sql, $params);
-                        $prior_ins_type = '';
-
-                        while ($row = sqlFetchArray($res)) {
-                            if ($row['provider']) {
-                                // since the query is sorted by DATE DESC can use prior ins type to identify
-                                // unless insurance date_end is applicable
-                                $row['isOld'] = (!empty($row['date_end']) && $row['date_end'] <= date("Y-m-d")) ? true : false;
-                                if (!$row['isOld']) {
-                                    $row['isOld'] = (strcmp($row['type'], $prior_ins_type) == 0) ? true : false;
-                                }
-                                $icobj = new InsuranceCompany($row['provider']);
-                                $adobj = $icobj->get_address();
-                                $insco_name = trim($icobj->get_name());
-                                $row['insco'] = [
-                                    'name' => trim($icobj->get_name()),
-                                    'address' => [
-                                        'line1' => $adobj->get_line1(),
-                                        'line2' => $adobj->get_line2(),
-                                        'city' => $adobj->get_city(),
-                                        'state' => $adobj->get_state(),
-                                        'postal' => $adobj->get_zip(),
-                                        'country' => $adobj->get_country()
-                                    ],
-                                ];
-                                $row['policy_type'] = (!empty($row['policy_type'])) ? $policy_types[$row['policy_type']] : false;
-                                $row['dispFromDate'] = $row['date'] ? true : false;
-                                $mname = ($row['subscriber_mname'] != "") ? $row['subscriber_mname'] : "";
-                                $row['subscriber_full_name'] = str_replace("%mname%", $mname, "{$row['subscriber_fname']} %mname% {$row['subscriber_lname']}");
-                                $row['until_date'] = $row['isOld'] ? $row['isOld'] : xlt('Present');
-                                $insArr[] = $row;
-                                $prior_ins_type = $row['type'];
-                            } else {
-                                $row['isOld'] = (strcmp($row['type'], $prior_ins_type) == 0) ? true : false;
-                                $row['dispFromDate'] = $row['date'] ? true : false;
-                                $row['insco'] = [
-                                    'name' => 'Self-Pay',
-                                    'address' => [
-                                        'line1' => '',
-                                        'line2' => '',
-                                        'city' => '',
-                                        'state' => '',
-                                        'postal' => '',
-                                        'country' => ''
-                                    ],
-                                ];
-                                $row['policy_type'] = false;
-                                $mname = ''; //($row['subscriber_mname'] != "") ? $row['subscriber_mname'] : "";
-                                $row['subscriber_full_name'] = ' '; // str_replace("%mname%", $mname, "{$row['subscriber_fname']} %mname% {$row['subscriber_lname']}");
-                                $row['until_date'] = ($row['isOld']) ? $row['isOld'] : xlt("Present");
-                                $prior_ins_type = $row['type'];
-                                if ($row['type'] != 'primary') {
-                                    continue;
-                                }
-                                $insArr[] = $row;
-                            }
-                        }
-
-                        if ($GLOBALS["enable_eligibility_requests"]) {
-                            if (($_POST['status_update'] ?? '') === 'true') {
-                                unset($_POST['status_update']);
-                                $showEligibility = true;
-                                $ok = EDI270::requestEligibleTransaction($pid);
-                                if ($ok === true) {
-                                    ob_start();
-                                    EDI270::showEligibilityInformation($pid, false);
-                                    $output = ob_get_contents();
-                                    ob_end_clean();
-                                } else {
-                                    $output = $ok;
-                                }
-                            } else {
-                                ob_start();
-                                EDI270::showEligibilityInformation($pid, true);
-                                $output = ob_get_contents();
-                                ob_end_clean();
-                            }
-                        } else {
-                            ob_start();
-                            EDI270::showEligibilityInformation($pid, true);
-                            $output = ob_get_contents();
-                            ob_end_clean();
-                        }
-
-                        $id = "insurance_ps_expand";
-                        $dispatchResult = $ed->dispatch(new CardRenderEvent('insurance'), CardRenderEvent::EVENT_HANDLE);
-                        $viewArgs = [
-                            'title' => xl("Insurance"),
-                            'id' => $id,
-                            'btnLabel' => "Edit",
-                            'btnLink' => "demographics_full.php",
-                            'linkMethod' => 'html',
-                            'initiallyCollapsed' => (getUserSetting($id) == 0) ? true : false,
-                            'ins' => $insArr,
-                            'eligibility' => $output,
-                            'enable_eligibility_requests' => $GLOBALS['enable_eligibility_requests'],
-                            'auth' => AclMain::aclCheckCore('patients', 'demo', '', 'write'),
-                            'prependedInjection' => $dispatchResult->getPrependedInjection(),
-                            'appendedInjection' => $dispatchResult->getAppendedInjection(),
-                        ];
-
-                        if (count($insArr) > 0) {
-                            echo $twig->getTwig()->render('patient/card/insurance.html.twig', $viewArgs);
-                        }
-                    endif;  // end if demographics authorized
 
                     if (AclMain::aclCheckCore('patients', 'notes')) :
                         $dispatchResult = $ed->dispatch(new CardRenderEvent('note'), CardRenderEvent::EVENT_HANDLE);
@@ -1928,6 +1744,7 @@ $oemr_ui = new OemrUI($arrOeUiSettings);
                             // Show Recall if one exists
                             $query = sqlStatement("SELECT * FROM `medex_recalls` WHERE `r_pid` = ?", [(int)$pid]);
                             $recallArr = [];
+                            $count2 = 0;
                             while ($result2 = sqlFetchArray($query)) {
                                 //tabYourIt('recall', 'main/messages/messages.php?go=' + choice);
                                 //parent.left_nav.loadFrame('1', tabNAME, url);

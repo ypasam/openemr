@@ -82,3 +82,89 @@ class TestWebsite_vitals:
                     break
             except NoSuchElementException:
                 pass
+
+    @pytest.mark.parametrize("url, username, password", read_configurations_from_file("secret.json"))
+    def test_vitals_validation_in_encounters(self, url, username, password):
+        success = login(self.browser, username, password, url)
+        assert success, "Login failed"
+
+        self.browser.find_element(By.ID, 'anySearchBox').send_keys('Abdul')
+        self.browser.find_element(By.ID, 'search_globals').click()
+
+        searchTable = self.browser.find_element(By.NAME, 'fin')
+        assert searchTable is not None
+
+        self.browser.implicitly_wait(5)
+
+        iframe = self.browser.find_element(By.CSS_SELECTOR, '#framesDisplay > div > iframe')
+        self.browser.switch_to.frame(iframe)
+
+        patient1Found = self.browser.find_element(By.ID, "pid_1")
+        patient1Found.click()
+
+        self.browser.switch_to.default_content()
+
+        pastEncounters = self.browser.find_element(By.ID, "pastEncounters")
+        pastEncounters.click()
+
+        latestEncounter = self.browser.find_element(By.XPATH, '//*[@id="attendantData"]/div/div[2]/div[1]/div/ul/li['
+                                                              '1]/a[1]')
+        latestEncounter.click()
+
+        self.browser.implicitly_wait(5)
+
+        # Accessing the nested iframes
+        firstIframe = self.browser.find_element(By.XPATH, '//*[@id="framesDisplay"]/div[3]/iframe')
+        # Waiting for the iframe contents to load
+        self.browser.implicitly_wait(5)
+        self.browser.switch_to.frame(firstIframe)
+
+        secondIframe = self.browser.find_element(By.XPATH, '//*[@id="enctabs-1"]/iframe')
+        # Waiting for the iframe contents to load
+        self.browser.implicitly_wait(5)
+        self.browser.switch_to.frame(secondIframe)
+
+        clinicalTab = self.browser.find_element(By.XPATH, '//*[@id="category_Clinical"]')
+        clinicalTab.click()
+
+        vitals = self.browser.find_element(By.XPATH, '//*[@id="navbarSupportedContent"]/ul[1]/li[2]/div/a[11]')
+        vitals.click()
+
+        self.browser.switch_to.parent_frame()
+
+        # Switching to the vitals iframe
+        vitalsIframe = self.browser.find_element(By.XPATH, '//*[@id="enctabs-1001"]/iframe')
+        # Waiting for the iframe contents to load
+        self.browser.implicitly_wait(5)
+        self.browser.switch_to.frame(vitalsIframe)
+
+        # Waiting for the input field to be visible and interactable
+        WeightinputField = WebDriverWait(self.browser, 10).until(
+            EC.visibility_of_element_located((By.ID, "weight_input_usa"))
+        )
+
+        # Entering invalid value to bypass keypress prevention
+        self.browser.execute_script("arguments[0].value = 'abc';", WeightinputField)
+
+        # Triggering the validation logic manually
+        WeightinputField.click()
+        WeightinputField.send_keys(" ")
+
+        # Saving the validation message
+        validation_message = self.browser.execute_script(
+            "return arguments[0].validationMessage;", WeightinputField)
+
+        expected_message = "Please enter a valid integer."
+        assert validation_message == expected_message
+
+        # Entering a valid input
+
+        HeightinputField = self.browser.find_element(By.ID, 'height_input_usa')
+        HeightinputField.send_keys("123")
+
+        # Saving the validation message
+        validation_message = self.browser.execute_script(
+            "return arguments[0].validationMessage;", HeightinputField)
+
+        expected_message = " "
+        assert validation_message == expected_message

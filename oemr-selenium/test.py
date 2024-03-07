@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import pytest
 from test_utils import *
 from selenium import webdriver

@@ -47,10 +47,3 @@ class TestWebsite_cdr_rule:
 
         rules = self.browser.find_element(By.XPATH, '//*[@id="mainMenu"]/div/div[10]/div/ul/li[4]/div/ul/li[2]/div')
         rules.click()
-
-
-
-
-
-
-

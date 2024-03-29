@@ -56,19 +56,13 @@
         // we then need to show a two digit representation of the value
         let value = node.value;
         let inputSave = document.getElementById(targetSaveUnit);
-        if (!inputSave) {
-            console.error(
-                "Failed to find node with data-target-input of ",
-                targetSaveUnit
-            );
+         if (!inputSave) {
+            console.error("Failed to find node with data-target-input of ", targetSaveUnit);
             return;
         }
         let inputConv = document.getElementById(targetInputConv);
         if (!inputConv) {
-            console.error(
-                "Failed to find node with data-target-input-conv of ",
-                targetInputConv
-            );
+            console.error("Failed to find node with data-target-input-conv of ", targetInputConv);
             return;
         }
 
@@ -83,33 +77,25 @@
                     inputSave.value = value;
                 }
             } else {
-                console.error(
-                    "Failed to get valid number for input with id ",
-                    node.id,
-                    " with value ",
-                    value
-                );
+                console.error("Failed to get valid number for input with id ", node.id, " with value ", value);
             }
         } else {
             inputSave.value = "";
             inputConv.value = "";
         }
 
-        if (
-            targetSaveUnit == "weight_input" ||
-            targetSaveUnit == "height_input"
-        ) {
+        if (targetSaveUnit == "weight_input" || targetSaveUnit == "height_input") {
             calculateBMI();
         }
     }
 
     function initDOMEvents() {
-        let vitalsForm = document.getElementById("vitalsForm");
+        let vitalsForm = document.getElementById('vitalsForm');
         if (!vitalsForm) {
             console.error("Failed to find vitalsForm DOM Node");
             return;
         }
-        vitalsForm.addEventListener("submit", vitalsFormSubmitted);
+        vitalsForm.addEventListener('submit', vitalsFormSubmitted);
 
         let formControls = vitalsForm.querySelectorAll(".form-control");
 

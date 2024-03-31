@@ -82,7 +82,7 @@ $rule = $viewBean->rule ?>
     <!--                      -->
     <?php $filters = $rule->filters; if ($filters) { ?>
     <div class="section">
-        <p class="header"><?php echo xlt('Demographics filter criteria'); ?> <a href="index.php?action=edit!add_criteria&id=<?php echo attr_url($rule->id); ?>&criteriaType=filter" class="action_link" onclick="top.restoreSession()">(<?php echo xlt('add'); ?>)</a></p>
+        <p class="header"><?php echo xlt('Inclusion/Exclusion criteria'); ?> <a href="index.php?action=edit!add_criteria&id=<?php echo attr_url($rule->id); ?>&criteriaType=filter" class="action_link" onclick="top.restoreSession()">(<?php echo xlt('add'); ?>)</a></p>
         <p>
             <?php if ($filters->criteria) { ?>
                 <div>

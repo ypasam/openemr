@@ -1,4 +1,5 @@
 import pytest
+import os
 from selenium import webdriver
 from selenium.common import NoSuchElementException, NoAlertPresentException
 from selenium.webdriver.chrome.options import Options
@@ -16,8 +17,13 @@ class TestWebsite_vitals:
     @pytest.fixture(autouse=True)
     def browser_setup_and_teardown(self):
         options = Options()
+        if os.environ.get('HEADLESS', 'false').lower() == 'true':
+            options.add_argument("--headless")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+
         self.browser = webdriver.Chrome(options=options)
-        self.browser.maximize_window()
+        #self.browser.maximize_window()
         self.browser.implicitly_wait(10)
 
         yield
@@ -123,6 +129,9 @@ class TestWebsite_vitals:
         # Waiting for the iframe contents to load
         self.browser.implicitly_wait(5)
         self.browser.switch_to.frame(secondIframe)
+
+        # hamburger_menu = self.browser.find_element(By.XPATH, '/html/body/nav/nav/button')
+        # hamburger_menu.click()
 
         clinicalTab = self.browser.find_element(By.XPATH, '//*[@id="category_Clinical"]')
         clinicalTab.click()

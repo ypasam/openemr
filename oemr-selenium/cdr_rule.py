@@ -1,6 +1,7 @@
 import pytest
 import os
 from selenium import webdriver
+from selenium.webdriver import ActionChains
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -9,7 +10,8 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from test_utils import *
 
-class TestWebsite_logout:
+
+class TestWebsite_cdr_rule:
     @pytest.fixture(autouse=True)
     def browser_setup_and_teardown(self):
         options = Options()
@@ -26,19 +28,22 @@ class TestWebsite_logout:
         self.browser.close()
         self.browser.quit()
 
-    @pytest.mark.parametrize("url, username, password", read_configurations_from_file("secret.json"))
-    def test_logout(self, url, username, password):
+    # This test will only run for admin user
+    @pytest.mark.parametrize("url, username, password", read_admin_configurations_from_file("secret.json"))
+    def test_cdr_rule_validation(self, url, username, password):
         success = login(self.browser, username, password, url)
         assert success, "Login failed"
 
-        self.browser.find_element(By.ID, 'username').click()
+        adminMenu = self.browser.find_element(By.XPATH, '//*[@id="mainMenu"]/div/div[10]/div/div')
 
-        logout_element = self.browser.find_element(By.XPATH, '//li[@class="menuLabel"][last()]')
-        logout_element.click()
+        actions = ActionChains(self.browser)
 
-        # Wait for the URL to change to the expected value
-        expected_url = url
-        WebDriverWait(self.browser, 10).until(EC.url_to_be(expected_url))
+        actions.move_to_element(adminMenu).perform()
 
-        # Assert the current URL after logout
-        assert self.browser.current_url == expected_url
+        practiceMenu = self.browser.find_element(By.XPATH,
+                                                 '//*[@id="mainMenu"]/div/div[10]/div/ul/li[4]/div/div')
+
+        actions.move_to_element(practiceMenu).perform()
+
+        rules = self.browser.find_element(By.XPATH, '//*[@id="mainMenu"]/div/div[10]/div/ul/li[4]/div/ul/li[2]/div')
+        rules.click()

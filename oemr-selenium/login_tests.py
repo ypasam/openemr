@@ -1,4 +1,5 @@
 import pytest
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -6,10 +7,16 @@ from webdriver_manager.core.os_manager import ChromeType
 from webdriver_manager.chrome import ChromeDriverManager
 from test_utils import *
 
+
 class TestWebsite_login:
     @pytest.fixture(autouse=True)
     def login_page_setup(self):
         options = Options()
+        if os.environ.get('HEADLESS', 'false').lower() == 'true':
+            options.add_argument("--headless")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+
         self.browser = webdriver.Chrome(options=options)
         self.browser.maximize_window()
         self.browser.implicitly_wait(10)
@@ -30,5 +37,5 @@ class TestWebsite_login:
         self.browser.find_element(By.ID, "clearPass").send_keys("abc")
         self.browser.find_element(By.ID, "login-button").submit()
 
-        error_message_element = self.browser.find_element(By.XPATH,'//*[@id="login_form"]/div/div[2]/div[1]/p')
+        error_message_element = self.browser.find_element(By.XPATH, '//*[@id="login_form"]/div/div[2]/div[1]/p')
         assert error_message_element.is_displayed()

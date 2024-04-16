@@ -1,4 +1,5 @@
 import pytest
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -10,8 +11,13 @@ class TestWebsite_patient_search:
     @pytest.fixture(autouse=True)
     def browser_setup_and_teardown(self):
         options = Options()
+        if os.environ.get('HEADLESS', 'false').lower() == 'true':
+            options.add_argument("--headless")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+
         self.browser = webdriver.Chrome(options=options)
-        self.browser.maximize_window()
+        #self.browser.maximize_window()
         self.browser.implicitly_wait(10)
 
         yield  # This allows the subsequent test methods to run
@@ -62,6 +68,9 @@ class TestWebsite_patient_search:
         success = login(self.browser, username, password, url)
         assert success, "Login failed"
 
+        hamburger_menu = self.browser.find_element(By.XPATH, '//*[@id="mainBox"]/nav/button')
+        hamburger_menu. click()
+
         finder_element = self.browser.find_element(By.XPATH, '//div[@class="menuLabel px-1" and text()="Finder"]')
         finder_element.click()
 
@@ -84,6 +93,9 @@ class TestWebsite_patient_search:
 
         success = login(self.browser, username, password, url)
         assert success, "Login failed"
+
+        hamburger_menu = self.browser.find_element(By.XPATH, '//*[@id="mainBox"]/nav/button')
+        hamburger_menu.click()
 
         finder_element = self.browser.find_element(By.XPATH, '//div[@class="menuLabel px-1" and text()="Finder"]')
         finder_element.click()

@@ -56,7 +56,7 @@
         // we then need to show a two digit representation of the value
         let value = node.value;
         let inputSave = document.getElementById(targetSaveUnit);
-        if (!inputSave) {
+         if (!inputSave) {
             console.error("Failed to find node with data-target-input of ", targetSaveUnit);
             return;
         }
@@ -97,7 +97,37 @@
         }
         vitalsForm.addEventListener('submit', vitalsFormSubmitted);
 
-        // we want to setup our reason code widgets
+        let formControls = vitalsForm.querySelectorAll(".form-control");
+
+        formControls.forEach(function (inputElement) {
+            // Skip validation setup for specific fields
+            if (
+                inputElement.id === "BMI_input" ||
+                inputElement.id === "BMI_status" ||
+                inputElement.id === "note_input" ||
+                inputElement.id === "temp_method"
+            ) {
+                return;
+            }
+
+            inputElement.setAttribute("placeholder", "Enter a number");
+            inputElement.oninput = function () {
+                if (this.value.match(/[^0-9]/)) {
+                    this.value = this.value.replace(/[^0-9]/g, ""); // Remove non-numeric characters
+                    this.setCustomValidity("Please enter a valid integer.");
+                } else {
+                    this.setCustomValidity(""); // Reset custom validity message
+                }
+                this.reportValidity(); // Display the validation message if any
+            };
+
+            inputElement.onkeydown = function (event) {
+                if (["e", ".", "-"].includes(event.key)) {
+                    event.preventDefault(); // Stop the key from producing input
+                }
+            };
+        });
+
         if (oeUI.reasonCodeWidget) {
             oeUI.reasonCodeWidget.init(webroot);
         } else {
@@ -106,31 +136,11 @@
         }
 
         let vitalsConvInputs = vitalsForm.querySelectorAll(".vitals-conv-unit");
-        vitalsConvInputs.forEach(function(node) {
-            node.addEventListener('change', convInputElement);
-        });
-        let formControlElements = document.querySelectorAll('.form-control.skip-template-editor');
-        formControlElements.forEach(function (node) {
-            if (node.id !== 'BMI_status') {
-               node.placeholder = 'Enter a number';
-
-               node.addEventListener('input', function() {
-                  if (!this.value.match(/^(?:\d+\.\d*|\.\d+|\d+)$/)) {
-                      var currentValue = this.value;
-                      var newValue = currentValue.replace(/[^0-9.]+/g, '')
-                        .replace(/(\..*)\./g, '$1')
-                        .replace(/(^\.)+/g, '');
-                      this.value = newValue;
-                      this.setCustomValidity('Please enter a valid integer.');
-                  } else {
-                      this.setCustomValidity(' ');
-                  }
-
-                  this.reportValidity();
-               });
-            }
+        vitalsConvInputs.forEach(function (node) {
+            node.addEventListener("change", convInputElement);
         });
     }
+
     function init(webRootParam, vitalsTranslations) {
         webroot = webRootParam;
         translations = vitalsTranslations;
